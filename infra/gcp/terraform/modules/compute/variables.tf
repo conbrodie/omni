@@ -107,13 +107,6 @@ variable "all_secret_ids" {
   type        = list(string)
 }
 
-variable "resend_api_key" {
-  description = "Resend API key for emails"
-  type        = string
-  default     = "CONFIGURE_RESEND_API_KEY"
-  sensitive   = true
-}
-
 # Storage
 variable "content_bucket_name" {
   description = "GCS bucket name for content storage"
@@ -289,4 +282,10 @@ variable "ai_answer_enabled" {
   description = "Enable AI answer feature"
   type        = string
   default     = "true"
+}
+
+variable "agents_enabled" {
+  description = "Enable background/scheduled agents feature"
+  type        = string
+  default     = "false"
 }

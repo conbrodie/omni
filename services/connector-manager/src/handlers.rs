@@ -15,9 +15,10 @@ use axum::{
     Json,
 };
 use futures::stream::Stream;
+use redis::AsyncCommands;
 use serde_json::json;
 use shared::db::repositories::SyncRunRepository;
-use shared::models::{SourceType, SyncType};
+use shared::models::{SearchOperator, SourceType, SyncType};
 use shared::queue::EventQueue;
 use shared::utils;
 use shared::{DocumentRepository, Repository, ServiceCredentialsRepo, SourceRepository};
@@ -222,11 +223,23 @@ pub async fn list_schedules(
     Ok(Json(schedules))
 }
 
+pub async fn list_sources(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<shared::models::Source>>, ApiError> {
+    let source_repo = SourceRepository::new(state.db_pool.pool());
+    let sources = source_repo
+        .find_all_sources()
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(sources))
+}
+
 pub async fn list_connectors(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ConnectorInfo>>, ApiError> {
     let client = ConnectorClient::new();
     let mut connectors = Vec::new();
+    let mut all_operators: Vec<SearchOperator> = Vec::new();
 
     for (source_type, url) in &state.config.connector_urls {
         let healthy = client.health_check(url).await;
@@ -236,12 +249,46 @@ pub async fn list_connectors(
             None
         };
 
+        if let Some(ref m) = manifest {
+            all_operators.extend(m.search_operators.clone());
+
+            // Cache the full manifest per source type in Redis
+            if let Ok(manifest_json) = serde_json::to_string(m) {
+                // SourceType serializes as snake_case (e.g. "google_drive")
+                let type_key = serde_json::to_value(source_type)
+                    .ok()
+                    .and_then(|v| v.as_str().map(|s| s.to_string()));
+                if let Some(type_str) = type_key {
+                    match state.redis_client.get_multiplexed_async_connection().await {
+                        Ok(mut conn) => {
+                            let key = format!("connector:manifest:{}", type_str);
+                            let _: Result<(), _> = conn.set(&key, manifest_json).await;
+                        }
+                        Err(e) => {
+                            error!("Failed to cache manifest for {}: {}", type_str, e);
+                        }
+                    }
+                }
+            }
+        }
+
         connectors.push(ConnectorInfo {
             source_type: source_type.clone(),
             url: url.clone(),
             healthy,
             manifest,
         });
+    }
+
+    if let Ok(json) = serde_json::to_string(&all_operators) {
+        match state.redis_client.get_multiplexed_async_connection().await {
+            Ok(mut conn) => {
+                let _: Result<(), _> = conn.set("search:operators", json).await;
+            }
+            Err(e) => {
+                error!("Failed to write search operators to Redis: {}", e);
+            }
+        }
     }
 
     Ok(Json(connectors))
@@ -692,6 +739,9 @@ pub async fn sdk_get_source_sync_config(
         credentials,
         connector_state: source.connector_state,
         source_type: source.source_type,
+        user_filter_mode: source.user_filter_mode,
+        user_whitelist: source.user_whitelist,
+        user_blacklist: source.user_blacklist,
     }))
 }
 

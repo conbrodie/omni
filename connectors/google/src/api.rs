@@ -24,6 +24,7 @@ use crate::models::{
     ConnectorManifest, SyncRequest, SyncResponse, SyncResponseExt, WebhookNotification,
 };
 use crate::sync::SyncManager;
+use shared::models::SearchOperator;
 use shared::models::{ServiceProvider, SourceType};
 
 #[derive(Clone)]
@@ -63,6 +64,7 @@ async fn health_check() -> impl IntoResponse {
 async fn manifest() -> impl IntoResponse {
     let manifest = ConnectorManifest {
         name: "google".to_string(),
+        display_name: "Google".to_string(),
         version: "1.0.0".to_string(),
         sync_modes: vec!["full".to_string(), "incremental".to_string()],
         actions: vec![ActionDefinition {
@@ -77,6 +79,21 @@ async fn manifest() -> impl IntoResponse {
                 }
             }),
         }],
+        search_operators: vec![
+            SearchOperator {
+                operator: "from".to_string(),
+                attribute_key: "sender".to_string(),
+                value_type: "person".to_string(),
+            },
+            SearchOperator {
+                operator: "label".to_string(),
+                attribute_key: "labels".to_string(),
+                value_type: "text".to_string(),
+            },
+        ],
+        read_only: false,
+        extra_schema: None,
+        attributes_schema: None,
     };
     Json(manifest)
 }

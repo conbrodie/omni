@@ -14,6 +14,7 @@ export enum SourceType {
     OUTLOOK = 'outlook',
     OUTLOOK_CALENDAR = 'outlook_calendar',
     FIREFLIES = 'fireflies',
+    IMAP = 'imap',
 }
 
 export enum ServiceProvider {
@@ -24,6 +25,7 @@ export enum ServiceProvider {
     MICROSOFT = 'microsoft',
     HUBSPOT = 'hubspot',
     FIREFLIES = 'fireflies',
+    IMAP = 'imap',
 }
 
 export enum AuthType {
@@ -75,6 +77,38 @@ export interface HubspotSourceConfig {
     portal_id?: string
 }
 
+export interface ImapSourceConfig {
+    display_name?: string
+    host: string
+    port: number
+    /** "tls" | "starttls" | "none" */
+    encryption: string
+    folder_allowlist: string[]
+    folder_denylist: string[]
+    /** 0 = unlimited */
+    max_message_size: number
+    sync_enabled: boolean
+}
+
+export const DEFAULT_SYNC_INTERVAL_SECONDS: Record<SourceType, number> = {
+    [SourceType.GOOGLE_DRIVE]: 1800,
+    [SourceType.GMAIL]: 1800,
+    [SourceType.SLACK]: 1800,
+    [SourceType.OUTLOOK]: 1800,
+    [SourceType.ONE_DRIVE]: 1800,
+    [SourceType.CONFLUENCE]: 3600,
+    [SourceType.JIRA]: 3600,
+    [SourceType.GITHUB]: 3600,
+    [SourceType.NOTION]: 3600,
+    [SourceType.HUBSPOT]: 3600,
+    [SourceType.SHARE_POINT]: 3600,
+    [SourceType.OUTLOOK_CALENDAR]: 3600,
+    [SourceType.FIREFLIES]: 3600,
+    [SourceType.IMAP]: 3600,
+    [SourceType.LOCAL_FILES]: 86400,
+    [SourceType.WEB]: 86400,
+}
+
 export const EMBEDDING_PROVIDER_TYPES = ['local', 'jina', 'openai', 'cohere', 'bedrock'] as const
 export type EmbeddingProviderType = (typeof EMBEDDING_PROVIDER_TYPES)[number]
 
@@ -84,4 +118,13 @@ export const PROVIDER_LABELS: Record<EmbeddingProviderType, string> = {
     openai: 'OpenAI',
     cohere: 'Cohere',
     bedrock: 'AWS Bedrock',
+}
+
+export const EMAIL_PROVIDER_TYPES = ['acs', 'resend', 'smtp'] as const
+export type EmailProviderType = (typeof EMAIL_PROVIDER_TYPES)[number]
+
+export const EMAIL_PROVIDER_LABELS: Record<EmailProviderType, string> = {
+    acs: 'Azure Communication Services',
+    resend: 'Resend',
+    smtp: 'SMTP',
 }

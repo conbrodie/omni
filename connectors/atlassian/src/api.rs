@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use shared::models::SyncRequest;
+use shared::models::{SearchOperator, SyncRequest};
 use shared::telemetry;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -91,20 +91,51 @@ async fn health() -> impl IntoResponse {
 async fn manifest() -> impl IntoResponse {
     let manifest = ConnectorManifest {
         name: "atlassian".to_string(),
+        display_name: "Atlassian".to_string(),
         version: "1.0.0".to_string(),
         sync_modes: vec!["full".to_string(), "incremental".to_string()],
         actions: vec![ActionDefinition {
             name: "search_spaces".to_string(),
             description: "Search Confluence spaces or Jira projects".to_string(),
             parameters: json!({
-                "type": "object",
-                "properties": {
-                    "query": { "type": "string", "description": "Search query to filter by name or key" },
-                    "type": { "type": "string", "enum": ["confluence", "jira"], "description": "Whether to search Confluence spaces or Jira projects" }
+                "query": {
+                    "type": "string",
+                    "required": false,
+                    "description": "Search query to filter by name or key"
                 },
-                "required": ["type"]
+                "type": {
+                    "type": "string",
+                    "required": true,
+                    "description": "Whether to search Confluence spaces or Jira projects"
+                }
             }),
+            mode: "read".to_string(),
         }],
+        search_operators: vec![
+            SearchOperator {
+                operator: "status".to_string(),
+                attribute_key: "status".to_string(),
+                value_type: "text".to_string(),
+            },
+            SearchOperator {
+                operator: "label".to_string(),
+                attribute_key: "labels".to_string(),
+                value_type: "text".to_string(),
+            },
+            SearchOperator {
+                operator: "project".to_string(),
+                attribute_key: "project_key".to_string(),
+                value_type: "text".to_string(),
+            },
+            SearchOperator {
+                operator: "assignee".to_string(),
+                attribute_key: "assignee".to_string(),
+                value_type: "person".to_string(),
+            },
+        ],
+        read_only: false,
+        extra_schema: None,
+        attributes_schema: None,
     };
     Json(manifest)
 }

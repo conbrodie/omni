@@ -1,21 +1,12 @@
 use crate::{
     db::error::DatabaseError,
-    models::{AttributeFilter, Document, Facet, FacetValue},
+    models::{AttributeFilter, DateFilter, Document},
     SourceType,
 };
 use serde_json::Value as JsonValue;
 use sqlx::{FromRow, PgPool};
 use std::collections::HashMap;
-use tracing::debug;
-
-#[derive(FromRow)]
-pub struct SearchHit {
-    #[sqlx(flatten)]
-    pub document: Document,
-    pub score: f32,
-    #[sqlx(default)]
-    pub content_snippets: Option<Vec<String>>,
-}
+use time::{self, OffsetDateTime};
 
 #[derive(FromRow)]
 pub struct TitleEntry {
@@ -172,6 +163,27 @@ impl DocumentRepository {
         Ok(source_ids)
     }
 
+    pub async fn fetch_all_permission_users(&self) -> Result<Vec<String>, DatabaseError> {
+        let users: Vec<String> = sqlx::query_scalar(
+            r#"SELECT DISTINCT lower(elem)
+               FROM documents, jsonb_array_elements_text(permissions->'users') AS elem
+               WHERE permissions->'users' IS NOT NULL"#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(users)
+    }
+
+    pub async fn fetch_max_last_indexed_at(&self) -> Result<Option<OffsetDateTime>, DatabaseError> {
+        let max_ts: Option<OffsetDateTime> =
+            sqlx::query_scalar(r#"SELECT MAX(last_indexed_at) FROM documents"#)
+                .fetch_one(&self.pool)
+                .await?;
+
+        Ok(max_ts)
+    }
+
     fn build_common_filters(
         &self,
         filters: &mut Vec<String>,
@@ -180,6 +192,7 @@ impl DocumentRepository {
         content_types: Option<&[String]>,
         attribute_filters: Option<&HashMap<String, AttributeFilter>>,
         user_email: Option<&str>,
+        date_filter: Option<&DateFilter>,
     ) {
         if !source_ids.is_empty() {
             filters.push(format!("source_id = ANY(${})", param_idx));
@@ -241,86 +254,30 @@ impl DocumentRepository {
             }
         }
 
-        if let Some(email) = user_email {
-            filters.push(self.generate_permission_filter(email));
-        }
-    }
-
-    pub async fn search(
-        &self,
-        query: &str,
-        source_ids: &[String],
-        content_types: Option<&[String]>,
-        attribute_filters: Option<&HashMap<String, AttributeFilter>>,
-        limit: i64,
-        offset: i64,
-        user_email: Option<&str>,
-        document_id: Option<&str>,
-    ) -> Result<Vec<SearchHit>, DatabaseError> {
-        if source_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let mut filters = vec!["(title ||| $1 OR content ||| $2)".to_string()];
-        let mut param_idx = 3;
-
-        self.build_common_filters(
-            &mut filters,
-            &mut param_idx,
-            source_ids,
-            content_types,
-            attribute_filters,
-            user_email,
-        );
-
-        // Document ID will be set when running a search query within a single document.
-        // Seems silly to use this function to search through the contents of a single doc, but
-        // it's the easiest way right now to get the search results in the desired format.
-        if document_id.is_some() {
-            filters.push(format!("id = ${}", param_idx));
-            param_idx += 1;
-        }
-
-        let where_clause = filters.join(" AND ");
-
-        let full_query = format!(
-            r#"
-            SELECT id, source_id, external_id, title, content_id, content_type,
-                   file_size, file_extension, url,
-                   metadata, permissions, attributes, created_at, updated_at, last_indexed_at,
-                   pdb.score(id) as score,
-                   pdb.snippets(content, start_tag => '**', end_tag => '**', max_num_chars => 200, "limit" => 3, sort_by => 'score') as content_snippets
-            FROM documents
-            WHERE {}
-            ORDER BY score DESC
-            LIMIT ${} OFFSET ${}"#,
-            where_clause,
-            param_idx,
-            param_idx + 1
-        );
-        debug!("Full search query: {}", full_query);
-
-        let title_query = format!("{}::pdb.boost(2)", query);
-        let mut query = sqlx::query_as::<_, SearchHit>(&full_query)
-            .bind(title_query)
-            .bind(query)
-            .bind(source_ids);
-
-        if let Some(ct) = content_types {
-            if !ct.is_empty() {
-                query = query.bind(ct);
+        if let Some(df) = date_filter {
+            if let Some(after) = &df.after {
+                let iso = after
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default();
+                filters.push(format!(
+                    "metadata->>'updated_at' >= '{}'",
+                    iso.replace('\'', "''")
+                ));
+            }
+            if let Some(before) = &df.before {
+                let iso = before
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default();
+                filters.push(format!(
+                    "metadata->>'updated_at' <= '{}'",
+                    iso.replace('\'', "''")
+                ));
             }
         }
 
-        if let Some(doc_id) = document_id {
-            query = query.bind(doc_id);
+        if let Some(email) = user_email {
+            filters.push(self.generate_permission_filter(email));
         }
-
-        query = query.bind(limit).bind(offset);
-
-        let results = query.fetch_all(&self.pool).await?;
-
-        Ok(results)
     }
 
     pub async fn find_by_source(&self, source_id: &str) -> Result<Vec<Document>, DatabaseError> {
@@ -519,76 +476,6 @@ impl DocumentRepository {
         .await?;
 
         Ok(upserted_document)
-    }
-
-    pub async fn get_facet_counts(
-        &self,
-        query: &str,
-        source_ids: &[String],
-        content_types: Option<&[String]>,
-        attribute_filters: Option<&HashMap<String, AttributeFilter>>,
-        user_email: Option<&str>,
-    ) -> Result<Vec<Facet>, DatabaseError> {
-        if source_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let mut filters = vec!["(title ||| $1 OR content ||| $2)".to_string()];
-        let mut param_idx = 3;
-
-        self.build_common_filters(
-            &mut filters,
-            &mut param_idx,
-            source_ids,
-            content_types,
-            attribute_filters,
-            user_email,
-        );
-
-        let where_clause = filters.join(" AND ");
-
-        let query_str = format!(
-            r#"
-            SELECT 'source_type' as facet, s.source_type as value, count(*) as count
-            FROM documents d
-            JOIN sources s ON d.source_id = s.id
-            WHERE {}
-            GROUP BY s.source_type
-            ORDER BY count DESC
-            "#,
-            where_clause
-        );
-
-        let title_query = format!("{}::pdb.boost(2)", query);
-        let mut query = sqlx::query_as::<_, (String, String, i64)>(&query_str)
-            .bind(title_query)
-            .bind(query)
-            .bind(source_ids);
-
-        if let Some(ct) = content_types {
-            if !ct.is_empty() {
-                query = query.bind(ct);
-            }
-        }
-
-        let facet_rows = query.fetch_all(&self.pool).await?;
-
-        let mut facets_map: std::collections::HashMap<String, Vec<FacetValue>> =
-            std::collections::HashMap::new();
-
-        for (facet_name, value, count) in facet_rows {
-            facets_map
-                .entry(facet_name)
-                .or_insert_with(Vec::new)
-                .push(FacetValue { value, count });
-        }
-
-        let facets: Vec<Facet> = facets_map
-            .into_iter()
-            .map(|(name, values)| Facet { name, values })
-            .collect();
-
-        Ok(facets)
     }
 
     /// Directly populates the content field since we use the ParadeDB BM25 index now

@@ -2,30 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use shared::models::SourceType;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectorManifest {
-    pub name: String,
-    pub version: String,
-    pub sync_modes: Vec<String>,
-    #[serde(default)]
-    pub actions: Vec<ActionDefinition>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionDefinition {
-    pub name: String,
-    pub description: String,
-    pub parameters: JsonValue,
-    #[serde(default = "default_action_mode")]
-    pub mode: String, // "read" | "write"
-}
-
-fn default_action_mode() -> String {
-    "write".to_string()
-}
-
-// SyncRequest and SyncResponse are imported from shared crate
-pub use shared::models::{SyncRequest, SyncResponse};
+pub use shared::models::{
+    ActionDefinition, ConnectorManifest, SearchOperator, SyncRequest, SyncResponse,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionRequest {
@@ -125,6 +104,9 @@ pub struct SdkSourceSyncConfigResponse {
     pub credentials: JsonValue,
     pub connector_state: Option<JsonValue>,
     pub source_type: SourceType,
+    pub user_filter_mode: shared::models::UserFilterMode,
+    pub user_whitelist: Option<JsonValue>,
+    pub user_blacklist: Option<JsonValue>,
 }
 
 // ============================================================================

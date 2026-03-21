@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from .context import SyncContext
-from .models import ActionDefinition, ActionResponse, ConnectorManifest
+from .models import ActionDefinition, ActionResponse, ConnectorManifest, SearchOperator
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,11 @@ class Connector(ABC):
         pass
 
     @property
+    def display_name(self) -> str:
+        """Human-readable display name. Override to customize."""
+        return self.name
+
+    @property
     def sync_modes(self) -> list[str]:
         """Supported sync modes. Override to customize."""
         return ["full"]
@@ -36,13 +41,20 @@ class Connector(ABC):
         """Available connector actions. Override to add actions."""
         return []
 
+    @property
+    def search_operators(self) -> list[SearchOperator]:
+        """Search operators this connector supports. Override to declare operators."""
+        return []
+
     def get_manifest(self) -> ConnectorManifest:
         """Return connector manifest."""
         return ConnectorManifest(
             name=self.name,
+            display_name=self.display_name,
             version=self.version,
             sync_modes=self.sync_modes,
             actions=self.actions,
+            search_operators=self.search_operators,
         )
 
     @abstractmethod

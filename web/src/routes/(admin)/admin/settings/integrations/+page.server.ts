@@ -29,6 +29,19 @@ export const load: PageServerLoad = async ({ locals }) => {
                 authType: 'service_account',
             },
             {
+                id: 'microsoft',
+                name: 'Microsoft 365',
+                description: 'Connect to OneDrive, SharePoint, Outlook mail and calendar',
+                connected: connectedSources.some(
+                    (source) =>
+                        source.sourceType === 'one_drive' ||
+                        source.sourceType === 'share_point' ||
+                        source.sourceType === 'outlook' ||
+                        source.sourceType === 'outlook_calendar',
+                ),
+                authType: 'access_token',
+            },
+            {
                 id: 'atlassian',
                 name: 'Atlassian',
                 description: 'Connect to Confluence and Jira using an API token',
@@ -74,12 +87,12 @@ export const load: PageServerLoad = async ({ locals }) => {
                 authType: 'api_key',
             },
             {
-                id: 'microsoft',
-                name: 'Microsoft 365',
-                description: 'Connect to OneDrive, SharePoint, Outlook mail and calendar',
-                connected: false,
-                authType: 'access_token',
-                comingSoon: true,
+                id: 'imap',
+                name: 'IMAP Email',
+                description:
+                    'Index emails from any IMAP-compatible mailbox (Gmail, Outlook, Fastmail, etc.)',
+                connected: connectedSources.some((source) => source.sourceType === 'imap'),
+                authType: 'basic_auth',
             },
         ],
     }

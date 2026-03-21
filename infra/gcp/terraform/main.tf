@@ -126,8 +126,6 @@ module "compute" {
   encryption_salt_secret_id   = module.secrets.encryption_salt_secret_id
   all_secret_ids              = module.secrets.all_secret_ids
 
-  resend_api_key    = var.resend_api_key
-
   # AI service configuration
   embedding_model         = var.embedding_model
   embedding_max_model_len = var.embedding_max_model_len
@@ -163,6 +161,7 @@ module "compute" {
   session_cookie_name        = var.session_cookie_name
   session_duration_days      = var.session_duration_days
   ai_answer_enabled          = var.ai_answer_enabled
+  agents_enabled             = var.agents_enabled
 
   content_bucket_name = module.storage.content_bucket_name
   batch_bucket_name   = module.storage.batch_bucket_name

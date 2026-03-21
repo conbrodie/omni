@@ -166,6 +166,7 @@ pub enum SourceType {
     Outlook,
     OutlookCalendar,
     Fireflies,
+    Imap,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq)]
@@ -180,6 +181,7 @@ pub enum ServiceProvider {
     Notion,
     Hubspot,
     Fireflies,
+    Imap,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq)]
@@ -246,6 +248,7 @@ pub struct DocumentMetadata {
     pub created_at: Option<OffsetDateTime>,
     #[serde(default, with = "time::serde::iso8601::option")]
     pub updated_at: Option<OffsetDateTime>,
+    pub content_type: Option<String>,
     pub mime_type: Option<String>,
     pub size: Option<String>,
     pub url: Option<String>,
@@ -267,7 +270,13 @@ pub type DocumentAttributes = HashMap<String, JsonValue>;
 
 /// Attribute filter for search queries.
 /// Supports exact match, multi-value OR, and range queries.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone)]
+pub struct DateFilter {
+    pub after: Option<OffsetDateTime>,
+    pub before: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum AttributeFilter {
     /// Single value exact match
@@ -281,6 +290,49 @@ pub enum AttributeFilter {
         #[serde(skip_serializing_if = "Option::is_none")]
         lte: Option<JsonValue>,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchOperator {
+    pub operator: String,
+    pub attribute_key: String,
+    #[serde(default = "default_search_operator_value_type")]
+    pub value_type: String, // "person", "text", "datetime"
+}
+
+fn default_search_operator_value_type() -> String {
+    "text".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionDefinition {
+    pub name: String,
+    pub description: String,
+    pub parameters: JsonValue,
+    #[serde(default = "default_action_mode")]
+    pub mode: String,
+}
+
+fn default_action_mode() -> String {
+    "write".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectorManifest {
+    pub name: String,
+    pub display_name: String,
+    pub version: String,
+    pub sync_modes: Vec<String>,
+    #[serde(default)]
+    pub actions: Vec<ActionDefinition>,
+    #[serde(default)]
+    pub search_operators: Vec<SearchOperator>,
+    #[serde(default)]
+    pub read_only: bool,
+    #[serde(default)]
+    pub extra_schema: Option<JsonValue>,
+    #[serde(default)]
+    pub attributes_schema: Option<JsonValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -474,6 +526,35 @@ pub struct MagicLink {
     #[serde(with = "time::serde::iso8601")]
     pub created_at: OffsetDateTime,
     pub user_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Person {
+    pub id: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub given_name: Option<String>,
+    pub surname: Option<String>,
+    pub avatar_url: Option<String>,
+    pub job_title: Option<String>,
+    pub department: Option<String>,
+    pub division: Option<String>,
+    pub company_name: Option<String>,
+    pub office_location: Option<String>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    pub country: Option<String>,
+    pub employee_id: Option<String>,
+    pub employee_type: Option<String>,
+    pub cost_center: Option<String>,
+    pub manager_id: Option<String>,
+    pub is_active: bool,
+    pub metadata: JsonValue,
+    pub external_id: Option<String>,
+    #[serde(with = "time::serde::iso8601")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::iso8601")]
+    pub updated_at: OffsetDateTime,
 }
 
 #[cfg(test)]

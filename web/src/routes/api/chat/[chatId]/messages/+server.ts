@@ -5,6 +5,7 @@ import { chatRepository, chatMessageRepository } from '$lib/server/db/chats'
 interface MessageRequest {
     content: string,
     mentionedDocumentIds: []
+    parentId?: string
 }
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -38,6 +39,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         const messages = chatMessages.map((msg) => ({
             id: msg.id,
             chat_id: msg.chatId,
+            parent_id: msg.parentId,
             message_seq_num: msg.messageSeqNum,
             message: msg.message,
             created_at: msg.createdAt,
@@ -103,8 +105,17 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
             content: messageRequest.content.trim(),
         }
 
+        // Determine parentId: use provided value, or find the last message in the active path
+        let parentId = messageRequest.parentId
+        if (!parentId) {
+            const lastMessage = await chatMessageRepository.getLastMessageInActivePath(chatId)
+            if (lastMessage) {
+                parentId = lastMessage.id
+            }
+        }
+
         // Save message to database
-        const savedMessage = await chatMessageRepository.create(chatId, userMessage, messageRequest.mentionedDocumentIds ?? [])
+        const savedMessage = await chatMessageRepository.create(chatId, userMessage, parentId, messageRequest.mentionedDocumentIds ?? [])
 
         logger.info('Message added successfully', {
             chatId,

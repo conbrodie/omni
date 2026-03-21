@@ -15,10 +15,19 @@
     import openaiIcon from '$lib/images/icons/openai.svg'
     import awsIcon from '$lib/images/icons/aws.svg'
     import geminiIcon from '$lib/images/icons/gemini.svg'
+    import azureIcon from '$lib/images/icons/azure.svg'
+    import googleIcon from '$lib/images/icons/google.svg'
 
     let { data }: { data: PageData } = $props()
 
-    type ProviderType = 'vllm' | 'anthropic' | 'bedrock' | 'openai' | 'gemini'
+    type ProviderType =
+        | 'vllm'
+        | 'anthropic'
+        | 'bedrock'
+        | 'openai'
+        | 'gemini'
+        | 'azure_foundry'
+        | 'vertex_ai'
 
     interface ProviderFormState {
         id?: string
@@ -27,6 +36,7 @@
         apiKey: string
         apiUrl: string
         regionName: string
+        projectId: string
     }
 
     interface ModelFormState {
@@ -42,6 +52,7 @@
         apiKey: '',
         apiUrl: '',
         regionName: '',
+        projectId: '',
     }
 
     const emptyModelForm: ModelFormState = {
@@ -74,8 +85,9 @@
     }
 
     const showApiKey = (p: ProviderType) => p === 'anthropic' || p === 'openai' || p === 'gemini'
-    const showApiUrl = (p: ProviderType) => p === 'vllm'
-    const showRegion = (p: ProviderType) => p === 'bedrock'
+    const showApiUrl = (p: ProviderType) => p === 'vllm' || p === 'azure_foundry'
+    const showRegion = (p: ProviderType) => p === 'bedrock' || p === 'vertex_ai'
+    const showProjectId = (p: ProviderType) => p === 'vertex_ai'
 
     interface ProviderMeta {
         label: string
@@ -109,9 +121,27 @@
             description: 'Gemini models via the Google AI API',
             icon: geminiIcon,
         },
+        azure_foundry: {
+            label: 'Azure AI Foundry',
+            description: 'OpenAI and Claude models via Azure AI Foundry',
+            icon: azureIcon,
+        },
+        vertex_ai: {
+            label: 'Google Cloud Vertex AI',
+            description: 'Claude and Gemini models via Google Cloud Vertex AI',
+            icon: googleIcon,
+        },
     }
 
-    const providerTypes: ProviderType[] = ['anthropic', 'openai', 'gemini', 'bedrock', 'vllm']
+    const providerTypes: ProviderType[] = [
+        'anthropic',
+        'openai',
+        'gemini',
+        'azure_foundry',
+        'bedrock',
+        'vertex_ai',
+        'vllm',
+    ]
 
     let providerByType = $derived(
         Object.fromEntries(
@@ -140,6 +170,7 @@
             apiKey: '',
             apiUrl: (provider.config as Record<string, string>).apiUrl || '',
             regionName: (provider.config as Record<string, string>).regionName || '',
+            projectId: (provider.config as Record<string, string>).projectId || '',
         }
         dialogOpen = true
     }
@@ -394,25 +425,77 @@
 
                     {#if showApiUrl(formState.providerType)}
                         <div class="space-y-2">
-                            <Label for="apiUrl">API URL *</Label>
+                            <Label for="apiUrl">
+                                {formState.providerType === 'azure_foundry'
+                                    ? 'Endpoint URL'
+                                    : 'API URL'} *
+                            </Label>
                             <Input
                                 id="apiUrl"
                                 name="apiUrl"
                                 bind:value={formState.apiUrl}
-                                placeholder="http://vllm:8000"
-                                required={formState.providerType === 'vllm'} />
+                                placeholder={formState.providerType === 'azure_foundry'
+                                    ? 'https://<project>.services.ai.azure.com'
+                                    : 'http://vllm:8000'}
+                                required={showApiUrl(formState.providerType)} />
                         </div>
+                    {/if}
+
+                    {#if formState.providerType === 'azure_foundry'}
+                        <Alert.Root>
+                            <Info class="h-4 w-4" />
+                            <Alert.Description>
+                                Authentication uses Azure Managed Identity. Ensure the VM or
+                                container has a managed identity with the Cognitive Services User
+                                role assigned.
+                            </Alert.Description>
+                        </Alert.Root>
                     {/if}
 
                     {#if showRegion(formState.providerType)}
                         <div class="space-y-2">
-                            <Label for="regionName">AWS Region</Label>
+                            <Label for="regionName">
+                                {formState.providerType === 'vertex_ai'
+                                    ? 'GCP Region'
+                                    : 'AWS Region'}
+                                {formState.providerType === 'vertex_ai' ? ' *' : ''}
+                            </Label>
                             <Input
                                 id="regionName"
                                 name="regionName"
                                 bind:value={formState.regionName}
-                                placeholder="us-east-1 (auto-detected if empty)" />
+                                placeholder={formState.providerType === 'vertex_ai'
+                                    ? 'us-central1'
+                                    : 'us-east-1 (auto-detected if empty)'}
+                                required={formState.providerType === 'vertex_ai'} />
                         </div>
+                    {/if}
+
+                    {#if showProjectId(formState.providerType)}
+                        <div class="space-y-2">
+                            <Label for="projectId">GCP Project ID *</Label>
+                            <Input
+                                id="projectId"
+                                name="projectId"
+                                bind:value={formState.projectId}
+                                placeholder="my-gcp-project"
+                                required />
+                        </div>
+                    {/if}
+
+                    {#if formState.providerType === 'vertex_ai'}
+                        <Alert.Root>
+                            <Info class="h-4 w-4" />
+                            <Alert.Description>
+                                Authentication uses Application Default Credentials (ADC). Ensure
+                                the VM or container has a service account with Vertex AI
+                                permissions, or set the GOOGLE_APPLICATION_CREDENTIALS environment
+                                variable.
+                            </Alert.Description>
+                        </Alert.Root>
+                    {/if}
+
+                    {#if formState.providerType === 'bedrock'}
                         <Alert.Root>
                             <Info class="h-4 w-4" />
                             <Alert.Description>

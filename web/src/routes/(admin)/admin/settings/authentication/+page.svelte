@@ -5,10 +5,12 @@
     import { Label } from '$lib/components/ui/label'
     import * as Card from '$lib/components/ui/card'
     import * as Alert from '$lib/components/ui/alert'
-    import { CheckCircle2, Loader2, Info, Pencil } from '@lucide/svelte'
+    import { Badge } from '$lib/components/ui/badge'
+    import { Loader2, Info, Pencil, KeyRound } from '@lucide/svelte'
     import { toast } from 'svelte-sonner'
     import type { PageData } from './$types'
     import googleIcon from '$lib/images/icons/google.svg'
+    import oktaIcon from '$lib/images/icons/okta.svg'
 
     let { data }: { data: PageData } = $props()
 
@@ -17,6 +19,16 @@
     let clientSecret = $state('')
     let isSubmitting = $state(false)
     let showForm = $state(false)
+
+    let oktaEnabled = $state(data.okta.enabled)
+    let oktaDomain = $state(data.okta.oktaDomain)
+    let oktaClientId = $state(data.okta.clientId)
+    let oktaClientSecret = $state('')
+    let oktaIsSubmitting = $state(false)
+    let oktaShowForm = $state(false)
+
+    let passwordEnabled = $state(data.passwordAuthEnabled)
+    let passwordIsSubmitting = $state(false)
 
     function handleToggle() {
         if (enabled) {
@@ -41,67 +53,263 @@
             </p>
         </div>
 
-        <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-            <Card.Root>
-                <Card.Header class="flex flex-row items-start justify-between space-y-0 pb-2">
-                    <div class="flex items-start gap-3">
-                        <img src={googleIcon} alt="Google" class="h-8 w-8" />
-                        <div>
-                            <Card.Title class="text-lg">Google</Card.Title>
-                            {#if data.google.enabled}
-                                <div class="flex items-center gap-1.5 text-sm text-green-600">
-                                    <CheckCircle2 class="h-3.5 w-3.5" />
-                                    Enabled
+        <div class="space-y-4">
+            <!-- Okta -->
+            {#if data.oktaSsoAvailable}
+                <Card.Root>
+                    <Card.Content>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img src={oktaIcon} alt="Okta" class="h-8 w-8" />
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <p class="text-lg font-semibold">Okta</p>
+                                        {#if data.okta.enabled}
+                                            <Badge
+                                                variant="secondary"
+                                                class="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                Enabled
+                                            </Badge>
+                                        {/if}
+                                    </div>
+                                    {#if !data.okta.enabled}
+                                        <p class="text-muted-foreground text-sm">
+                                            Sign in with Okta SSO
+                                        </p>
+                                    {/if}
                                 </div>
-                            {:else}
-                                <Card.Description>Sign in with Google Workspace</Card.Description>
+                            </div>
+                            {#if data.okta.enabled && !oktaShowForm}
+                                <div class="flex flex-wrap gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        class="cursor-pointer gap-1"
+                                        onclick={() => (oktaShowForm = true)}>
+                                        <Pencil class="h-3 w-3" />
+                                        Edit
+                                    </Button>
+                                    <form
+                                        method="POST"
+                                        action="?/updateOkta"
+                                        use:enhance={() => {
+                                            oktaIsSubmitting = true
+                                            return async ({ result, update }) => {
+                                                oktaIsSubmitting = false
+                                                await update()
+                                                if (result.type === 'success') {
+                                                    toast.success(
+                                                        result.data?.message || 'Okta SSO disabled',
+                                                    )
+                                                    oktaEnabled = false
+                                                } else if (result.type === 'failure') {
+                                                    toast.error(
+                                                        result.data?.error ||
+                                                            'Something went wrong',
+                                                    )
+                                                }
+                                            }
+                                        }}>
+                                        <input type="hidden" name="enabled" value="false" />
+                                        <input type="hidden" name="oktaDomain" value="" />
+                                        <input type="hidden" name="clientId" value="" />
+                                        <input type="hidden" name="clientSecret" value="" />
+                                        <Button
+                                            type="submit"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={oktaIsSubmitting}
+                                            class="cursor-pointer gap-1 text-red-600 hover:text-red-700">
+                                            {oktaIsSubmitting ? 'Disabling...' : 'Disable'}
+                                        </Button>
+                                    </form>
+                                </div>
                             {/if}
                         </div>
-                    </div>
-                </Card.Header>
-                <Card.Content>
-                    {#if data.google.enabled && !showForm}
-                        <div class="flex flex-wrap gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                class="cursor-pointer gap-1"
-                                onclick={() => (showForm = true)}>
-                                <Pencil class="h-3 w-3" />
-                                Edit
-                            </Button>
+
+                        {#if data.okta.enabled && !oktaShowForm}
+                            <div class="mt-3 space-y-1 text-sm">
+                                <div>
+                                    <span class="text-muted-foreground">Domain:</span>
+                                    <span class="font-mono">{data.okta.oktaDomain}</span>
+                                </div>
+                                <div>
+                                    <span class="text-muted-foreground">Client ID:</span>
+                                    <span class="font-mono">{data.okta.clientId}</span>
+                                </div>
+                            </div>
+                        {:else if oktaShowForm || !data.okta.enabled}
                             <form
                                 method="POST"
-                                action="?/update"
+                                action="?/updateOkta"
                                 use:enhance={() => {
-                                    isSubmitting = true
+                                    oktaIsSubmitting = true
                                     return async ({ result, update }) => {
-                                        isSubmitting = false
+                                        oktaIsSubmitting = false
                                         await update()
                                         if (result.type === 'success') {
-                                            toast.success(
-                                                result.data?.message || 'Google Auth disabled',
-                                            )
-                                            enabled = false
+                                            toast.success(result.data?.message || 'Settings saved')
+                                            oktaClientSecret = ''
+                                            oktaShowForm = false
                                         } else if (result.type === 'failure') {
                                             toast.error(
                                                 result.data?.error || 'Something went wrong',
                                             )
                                         }
                                     }
-                                }}>
-                                <input type="hidden" name="enabled" value="false" />
-                                <input type="hidden" name="clientId" value="" />
-                                <input type="hidden" name="clientSecret" value="" />
+                                }}
+                                class="mt-4 space-y-4">
+                                <input type="hidden" name="enabled" value="true" />
+
+                                <Alert.Root>
+                                    <Info class="h-4 w-4" />
+                                    <Alert.Description>
+                                        Create an Okta application (Web, OIDC), and paste the
+                                        credentials here. Set the sign-in redirect URI to
+                                        <code class="bg-muted rounded px-1 text-sm"
+                                            >{'{app_url}'}/auth/okta/callback</code>
+                                    </Alert.Description>
+                                </Alert.Root>
+
+                                <div class="space-y-2">
+                                    <Label for="oktaDomain">Okta Domain *</Label>
+                                    <Input
+                                        id="oktaDomain"
+                                        name="oktaDomain"
+                                        bind:value={oktaDomain}
+                                        placeholder="mycompany.okta.com"
+                                        required />
+                                </div>
+
+                                <div class="space-y-2">
+                                    <Label for="oktaClientId">Client ID *</Label>
+                                    <Input
+                                        id="oktaClientId"
+                                        name="clientId"
+                                        bind:value={oktaClientId}
+                                        placeholder="0oa1b2c3d4e5f6g7h8i9"
+                                        required />
+                                </div>
+
+                                <div class="space-y-2">
+                                    <Label for="oktaClientSecret">
+                                        Client Secret {data.okta.hasClientSecret ? '' : '*'}
+                                    </Label>
+                                    <Input
+                                        id="oktaClientSecret"
+                                        name="clientSecret"
+                                        type="password"
+                                        bind:value={oktaClientSecret}
+                                        placeholder={data.okta.hasClientSecret
+                                            ? 'Leave empty to keep current secret'
+                                            : 'Enter client secret'}
+                                        required={!data.okta.hasClientSecret} />
+                                </div>
+
+                                <div class="flex justify-end gap-2">
+                                    {#if data.okta.enabled}
+                                        <Button
+                                            variant="outline"
+                                            type="button"
+                                            class="cursor-pointer"
+                                            onclick={() => (oktaShowForm = false)}>
+                                            Cancel
+                                        </Button>
+                                    {/if}
+                                    <Button
+                                        type="submit"
+                                        disabled={oktaIsSubmitting}
+                                        class="cursor-pointer">
+                                        {#if oktaIsSubmitting}
+                                            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                            Saving...
+                                        {:else}
+                                            {data.okta.enabled ? 'Update' : 'Enable'}
+                                        {/if}
+                                    </Button>
+                                </div>
+                            </form>
+                        {/if}
+                    </Card.Content>
+                </Card.Root>
+            {/if}
+
+            <!-- Google -->
+            <Card.Root>
+                <Card.Content>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <img src={googleIcon} alt="Google" class="h-8 w-8" />
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-lg font-semibold">Google</p>
+                                    {#if data.google.enabled}
+                                        <Badge
+                                            variant="secondary"
+                                            class="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                            Enabled
+                                        </Badge>
+                                    {/if}
+                                </div>
+                                {#if !data.google.enabled}
+                                    <p class="text-muted-foreground text-sm">
+                                        Sign in with Google Workspace
+                                    </p>
+                                {/if}
+                            </div>
+                        </div>
+                        {#if data.google.enabled && !showForm}
+                            <div class="flex flex-wrap gap-2">
                                 <Button
-                                    type="submit"
                                     variant="outline"
                                     size="sm"
-                                    disabled={isSubmitting}
-                                    class="cursor-pointer gap-1 text-red-600 hover:text-red-700">
-                                    {isSubmitting ? 'Disabling...' : 'Disable'}
+                                    class="cursor-pointer gap-1"
+                                    onclick={() => (showForm = true)}>
+                                    <Pencil class="h-3 w-3" />
+                                    Edit
                                 </Button>
-                            </form>
+                                <form
+                                    method="POST"
+                                    action="?/update"
+                                    use:enhance={() => {
+                                        isSubmitting = true
+                                        return async ({ result, update }) => {
+                                            isSubmitting = false
+                                            await update()
+                                            if (result.type === 'success') {
+                                                toast.success(
+                                                    result.data?.message || 'Google Auth disabled',
+                                                )
+                                                enabled = false
+                                            } else if (result.type === 'failure') {
+                                                toast.error(
+                                                    result.data?.error || 'Something went wrong',
+                                                )
+                                            }
+                                        }
+                                    }}>
+                                    <input type="hidden" name="enabled" value="false" />
+                                    <input type="hidden" name="clientId" value="" />
+                                    <input type="hidden" name="clientSecret" value="" />
+                                    <Button
+                                        type="submit"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isSubmitting}
+                                        class="cursor-pointer gap-1 text-red-600 hover:text-red-700">
+                                        {isSubmitting ? 'Disabling...' : 'Disable'}
+                                    </Button>
+                                </form>
+                            </div>
+                        {/if}
+                    </div>
+
+                    {#if data.google.enabled && !showForm}
+                        <div class="mt-3 space-y-1 text-sm">
+                            <div>
+                                <span class="text-muted-foreground">Client ID:</span>
+                                <span class="font-mono">{data.google.clientId}</span>
+                            </div>
                         </div>
                     {:else if showForm || !data.google.enabled}
                         <form
@@ -121,7 +329,7 @@
                                     }
                                 }
                             }}
-                            class="space-y-4">
+                            class="mt-4 space-y-4">
                             <input type="hidden" name="enabled" value="true" />
 
                             <Alert.Root>
@@ -160,7 +368,7 @@
                                     required={!data.google.hasClientSecret} />
                             </div>
 
-                            <div class="flex gap-2">
+                            <div class="flex justify-end gap-2">
                                 {#if data.google.enabled}
                                     <Button
                                         variant="outline"
@@ -184,6 +392,68 @@
                             </div>
                         </form>
                     {/if}
+                </Card.Content>
+            </Card.Root>
+
+            <!-- Password -->
+            <Card.Root>
+                <Card.Content class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <KeyRound class="text-muted-foreground h-8 w-8" />
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <p class="text-lg font-semibold">Password</p>
+                                {#if passwordEnabled}
+                                    <Badge
+                                        variant="secondary"
+                                        class="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                        Enabled
+                                    </Badge>
+                                {/if}
+                            </div>
+                            {#if !passwordEnabled}
+                                <p class="text-muted-foreground text-sm">
+                                    Email and password authentication is disabled
+                                </p>
+                            {/if}
+                        </div>
+                    </div>
+                    <form
+                        method="POST"
+                        action="?/updatePassword"
+                        use:enhance={() => {
+                            passwordIsSubmitting = true
+                            return async ({ result, update }) => {
+                                passwordIsSubmitting = false
+                                await update()
+                                if (result.type === 'success') {
+                                    toast.success(result.data?.message || 'Settings saved')
+                                    passwordEnabled = !passwordEnabled
+                                } else if (result.type === 'failure') {
+                                    toast.error(result.data?.error || 'Something went wrong')
+                                }
+                            }
+                        }}>
+                        <input type="hidden" name="enabled" value={!passwordEnabled} />
+                        {#if passwordEnabled}
+                            <Button
+                                type="submit"
+                                variant="outline"
+                                size="sm"
+                                disabled={passwordIsSubmitting}
+                                class="cursor-pointer gap-1 text-red-600 hover:text-red-700">
+                                {passwordIsSubmitting ? 'Disabling...' : 'Disable'}
+                            </Button>
+                        {:else}
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={passwordIsSubmitting}
+                                class="cursor-pointer">
+                                {passwordIsSubmitting ? 'Enabling...' : 'Enable'}
+                            </Button>
+                        {/if}
+                    </form>
                 </Card.Content>
             </Card.Root>
         </div>

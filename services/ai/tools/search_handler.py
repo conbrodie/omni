@@ -18,63 +18,96 @@ from tools.registry import ToolContext, ToolResult
 
 logger = logging.getLogger(__name__)
 
-SEARCH_TOOLS = [
-    {
-        "name": "search_documents",
-        "description": "Search enterprise documents using hybrid text and semantic search. Use this when you need to find information to answer user questions. Wherever possible, use the sources parameter to limit the search to specific apps.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query to find relevant documents. Can search using keywords, or a natural language question to get semantic search results.",
-                },
-                "document_id": {
-                    "type": "string",
-                    "description": "Optional: restrict search to a specific document by ID. Use this to search within a single document for relevant sections.",
-                },
-                "sources": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional: specific source types to search (valid values: google_drive, slack, confluence, jira, web, slack, fireflies, hubspot.)",
-                },
-                "content_types": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional: file types to include (e.g., pdf, docx, txt)",
-                },
-                "attributes": {
-                    "type": "object",
-                    "description": (
-                        "Optional: filter results by document attributes. "
-                        "Common Jira attributes: status, priority, issue_type, assignee, reporter, labels, components, project_key. "
-                        "Common Confluence attributes: space_id, status. "
-                        'Values can be: a string for exact match (e.g., {"status": "Done"}), '
-                        'an array for OR match (e.g., {"priority": ["High", "Critical"]}), '
-                        'or an object with gte/lte keys for range queries (e.g., {"updated": {"gte": "2024-01-01"}}).'
-                    ),
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of results to return (default: 10)",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-]
-
 _TOOL_NAMES = {"search_documents"}
+
+# Operators already documented as universal — exclude from connector-specific lists
+_UNIVERSAL_OPERATORS = {"by", "in", "from", "type", "before", "after"}
+
+
+def _build_query_description(
+    search_operators: list[dict],
+) -> str:
+    """Build a rich description for the query parameter with operator syntax."""
+    lines = [
+        "The search query. Supports inline operators for filtering:",
+        "",
+        "Universal operators:",
+        "- in:<source> — filter by app (e.g., in:slack, in:drive, in:jira)",
+        "- by:<person> — filter by author/creator",
+        "- from:<person> — filter by sender (emails, messages)",
+        "- type:<type> — content type (sheet, doc, pdf, email, issue, pr, meeting, slide, page)",
+        "- before:<date> / after:<date> — date range (YYYY-MM-DD, YYYY-MM, or YYYY)",
+        "Date keywords (no operator needed): last week, last month, this week, yesterday, today",
+    ]
+
+    # Group connector-specific operators by source_type
+    ops_by_source: dict[str, list[str]] = {}
+    for op in search_operators:
+        if op["operator"] in _UNIVERSAL_OPERATORS:
+            continue
+        display_name = op.get("display_name", op.get("source_type", ""))
+        ops_by_source.setdefault(display_name, []).append(f"{op['operator']}:<value>")
+
+    if ops_by_source:
+        lines.append("")
+        lines.append("Connector-specific operators:")
+        for source_name in sorted(ops_by_source):
+            ops_str = ", ".join(sorted(ops_by_source[source_name]))
+            lines.append(f"- {source_name}: {ops_str}")
+
+    lines.append("")
+    lines.append(
+        'Examples: "status:done in:jira sprint tasks", "type:pdf after:2024-01 invoice", "budget last week"'
+    )
+
+    return "\n".join(lines)
+
+
+def _build_search_tools(
+    search_operators: list[dict] | None = None,
+) -> list[dict]:
+    """Build the search tool definition with dynamic operators."""
+    query_desc = _build_query_description(search_operators or [])
+
+    return [
+        {
+            "name": "search_documents",
+            "description": "Search enterprise documents using hybrid text and semantic search. Use this when you need to find information to answer user questions. Use inline query operators (in:, by:, type:, status:, etc.) for filtering.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": query_desc,
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "description": "Optional: restrict search to a specific document by ID. Use this to search within a single document for relevant sections.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 10)",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    ]
 
 
 class SearchToolHandler:
     """Wraps existing search logic as a ToolHandler."""
 
-    def __init__(self, searcher_tool: SearcherTool) -> None:
+    def __init__(
+        self,
+        searcher_tool: SearcherTool,
+        search_operators: list[dict] | None = None,
+    ) -> None:
         self._searcher = searcher_tool
+        self._tools = _build_search_tools(search_operators)
 
     def get_tools(self) -> list[dict]:
-        return SEARCH_TOOLS
+        return self._tools
 
     def can_handle(self, tool_name: str) -> bool:
         return tool_name in _TOOL_NAMES
@@ -121,21 +154,36 @@ class SearchToolHandler:
             doc_content_text_blocks = [
                 TextBlockParam(type="text", text=h) for h in result.highlights
             ]
+
+            metadata_blocks = [
+                TextBlockParam(type="text", text=f"[Document ID: {doc.id}]"),
+                TextBlockParam(type="text", text=f"[Document Name: {doc.title}]"),
+                TextBlockParam(
+                    type="text",
+                    text=f"[Source: {result.source_type or 'unknown'}]",
+                ),
+                TextBlockParam(type="text", text=f"[URL: {doc.url or '<unknown>'}]"),
+            ]
+
+            if doc.attributes:
+                attrs_str = ", ".join(f"{k}: {v}" for k, v in doc.attributes.items())
+                metadata_blocks.append(
+                    TextBlockParam(type="text", text=f"[Attributes: {attrs_str}]")
+                )
+
+            extra = (doc.metadata or {}).get("extra")
+            if extra and isinstance(extra, dict):
+                extra_str = ", ".join(f"{k}: {v}" for k, v in extra.items())
+                metadata_blocks.append(
+                    TextBlockParam(type="text", text=f"[Extra: {extra_str}]")
+                )
+
             content_blocks.append(
                 SearchResultBlockParam(
                     type="search_result",
                     title=doc.title,
                     source=doc.url or "<unknown>",
-                    content=[
-                        TextBlockParam(type="text", text=f"[Document ID: {doc.id}]"),
-                        TextBlockParam(
-                            type="text", text=f"[Document Name: {doc.title}]"
-                        ),
-                        TextBlockParam(
-                            type="text", text=f"[URL: {doc.url or '<unknown>'}]"
-                        ),
-                        *doc_content_text_blocks,
-                    ],
+                    content=[*metadata_blocks, *doc_content_text_blocks],
                     citations=CitationsConfigParam(enabled=True),
                 )
             )
@@ -154,8 +202,6 @@ async def _execute_search_tool(
     search_request = SearchRequest(
         query=tool_input.query,
         document_id=tool_input.document_id,
-        source_types=tool_input.sources,
-        content_types=tool_input.content_types,
         limit=tool_input.limit or 10,
         offset=0,
         mode="hybrid",
@@ -165,7 +211,6 @@ async def _execute_search_tool(
         original_user_query=original_user_query,
         include_facets=False,
         ignore_typos=True,
-        attribute_filters=tool_input.attributes,
     )
     try:
         response: SearchResponse = await searcher_tool.handle(search_request)

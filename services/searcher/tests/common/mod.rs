@@ -5,7 +5,8 @@ use axum::{
     Router,
 };
 use omni_searcher::{
-    create_app, suggested_questions::SuggestedQuestionsGenerator, typeahead::TitleIndex, AppState,
+    create_app, operator_registry::OperatorRegistry,
+    suggested_questions::SuggestedQuestionsGenerator, typeahead::TitleIndex, AppState,
 };
 use serde_json::{json, Value};
 use shared::storage::postgres::PostgresStorage;
@@ -36,6 +37,8 @@ impl SearcherTestFixture {
             rrf_k: 60.0,
             semantic_search_timeout_ms: 5000,
             rag_context_window: 2,
+            recency_boost_weight: 0.2,
+            recency_half_life_days: 30.0,
         };
 
         // Create content storage using PostgresStorage directly
@@ -60,6 +63,7 @@ impl SearcherTestFixture {
             content_storage,
             suggested_questions_generator,
             title_index: title_index.clone(),
+            operator_registry: Arc::new(OperatorRegistry::new(test_env.redis_client.clone())),
         };
 
         let app = create_app(app_state);

@@ -12,21 +12,19 @@
     import googleLogo from '$lib/images/icons/google.svg'
     import slackLogo from '$lib/images/icons/slack.svg'
     import atlassianLogo from '$lib/images/icons/atlassian.svg'
-    import googleDriveLogo from '$lib/images/icons/google-drive.svg'
-    import gmailLogo from '$lib/images/icons/gmail.svg'
-    import confluenceLogo from '$lib/images/icons/confluence.svg'
-    import jiraLogo from '$lib/images/icons/jira.svg'
     import hubspotLogo from '$lib/images/icons/hubspot.svg'
     import firefliesLogo from '$lib/images/icons/fireflies.svg'
     import microsoftLogo from '$lib/images/icons/microsoft.svg'
-    import { Globe, HardDrive, Loader2 } from '@lucide/svelte'
+    import { getSourceIconPath } from '$lib/utils/icons'
+    import { Globe, HardDrive, Loader2, Mail } from '@lucide/svelte'
     import { toast } from 'svelte-sonner'
     import GoogleWorkspaceSetup from '$lib/components/google-workspace-setup.svelte'
-    import GoogleOAuthSetup from '$lib/components/google-oauth-setup.svelte'
     import AtlassianConnectorSetup from '$lib/components/atlassian-connector-setup.svelte'
     import SlackConnectorSetup from '$lib/components/slack-connector-setup.svelte'
     import HubspotConnectorSetup from '$lib/components/hubspot-connector-setup.svelte'
     import FirefliesConnectorSetup from '$lib/components/fireflies-connector-setup.svelte'
+    import ImapConnectorSetup from '$lib/components/imap-connector-setup.svelte'
+    import MicrosoftConnectorSetup from '$lib/components/microsoft-connector-setup.svelte'
     import WebConnectorSetupDialog from '$lib/components/web-connector-setup-dialog.svelte'
     import FilesystemConnectorSetupDialog from '$lib/components/filesystem-connector-setup-dialog.svelte'
     import { SourceType } from '$lib/types'
@@ -97,18 +95,14 @@
     }
 
     let showGoogleSetup = $state(false)
-    let showGoogleOAuthSetup = $state(false)
     let showAtlassianSetup = $state(false)
     let showSlackSetup = $state(false)
     let showWebSetup = $state(false)
     let showFilesystemSetup = $state(false)
     let showHubspotSetup = $state(false)
     let showFirefliesSetup = $state(false)
-
-    function handleGoogleOAuthSetupSuccess() {
-        showGoogleOAuthSetup = false
-        window.location.reload()
-    }
+    let showImapSetup = $state(false)
+    let showMicrosoftSetup = $state(false)
 
     function handleConnect(integrationId: string) {
         if (integrationId === 'google') {
@@ -125,6 +119,10 @@
             showHubspotSetup = true
         } else if (integrationId === 'fireflies') {
             showFirefliesSetup = true
+        } else if (integrationId === 'imap') {
+            showImapSetup = true
+        } else if (integrationId === 'microsoft') {
+            showMicrosoftSetup = true
         }
     }
 
@@ -163,29 +161,18 @@
         window.location.reload()
     }
 
-    function getSourceIcon(sourceType: SourceType) {
-        switch (sourceType) {
-            case SourceType.GOOGLE_DRIVE:
-                return googleDriveLogo
-            case SourceType.GMAIL:
-                return gmailLogo
-            case SourceType.SLACK:
-                return slackLogo
-            case SourceType.CONFLUENCE:
-                return confluenceLogo
-            case SourceType.JIRA:
-                return jiraLogo
-            case SourceType.HUBSPOT:
-                return hubspotLogo
-            case SourceType.FIREFLIES:
-                return firefliesLogo
-            case SourceType.WEB:
-                return null
-            case SourceType.LOCAL_FILES:
-                return null
-            default:
-                return null
-        }
+    function handleImapSetupSuccess() {
+        showImapSetup = false
+        window.location.reload()
+    }
+
+    function handleMicrosoftSetupSuccess() {
+        showMicrosoftSetup = false
+        window.location.reload()
+    }
+
+    function getSourceIcon(sourceType: string) {
+        return getSourceIconPath(sourceType)
     }
 
     function getIntegrationIcon(integrationId: string) {
@@ -234,6 +221,16 @@
                 return 'records'
             case SourceType.FIREFLIES:
                 return 'transcripts'
+            case SourceType.IMAP:
+                return 'emails'
+            case SourceType.ONE_DRIVE:
+                return 'files'
+            case SourceType.OUTLOOK:
+                return 'emails'
+            case SourceType.OUTLOOK_CALENDAR:
+                return 'events'
+            case SourceType.SHARE_POINT:
+                return 'documents'
             case SourceType.WEB:
                 return 'pages'
             case SourceType.LOCAL_FILES:
@@ -259,10 +256,17 @@
                 return `/admin/settings/integrations/hubspot/${sourceId}`
             case SourceType.FIREFLIES:
                 return `/admin/settings/integrations/fireflies/${sourceId}`
+            case SourceType.IMAP:
+                return `/admin/settings/integrations/imap/${sourceId}`
             case SourceType.WEB:
                 return `/admin/settings/integrations/web/${sourceId}`
             case SourceType.LOCAL_FILES:
                 return `/admin/settings/integrations/filesystem/${sourceId}`
+            case SourceType.ONE_DRIVE:
+            case SourceType.OUTLOOK:
+            case SourceType.OUTLOOK_CALENDAR:
+            case SourceType.SHARE_POINT:
+                return `/admin/settings/integrations/microsoft/${sourceId}`
             default:
                 return '#'
         }
@@ -305,6 +309,8 @@
                                     <Globe class="h-6 w-6" />
                                 {:else if source.sourceType === 'local_files'}
                                     <HardDrive class="h-6 w-6" />
+                                {:else if source.sourceType === 'imap'}
+                                    <Mail class="h-6 w-6" />
                                 {/if}
                                 <div class="flex flex-col gap-0.5">
                                     <div class="flex items-center gap-2">
@@ -399,6 +405,8 @@
                                     <Globe class="h-6 w-6" />
                                 {:else if integration.id === 'filesystem'}
                                     <HardDrive class="h-6 w-6" />
+                                {:else if integration.id === 'imap'}
+                                    <Mail class="h-6 w-6" />
                                 {/if}
                                 <span>{integration.name}</span>
                             </CardTitle>
@@ -406,25 +414,12 @@
                         </CardHeader>
                         <CardContent class="flex-1" />
                         <CardFooter class="flex gap-2">
-                            {#if integration.comingSoon}
-                                <Button size="sm" disabled>Coming Soon</Button>
-                            {:else}
-                                <Button
-                                    size="sm"
-                                    class="cursor-pointer"
-                                    onclick={() => handleConnect(integration.id)}>
-                                    Connect
-                                </Button>
-                                {#if integration.id === 'google' && data.googleOAuthConfigured}
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        class="cursor-pointer"
-                                        onclick={() => (showGoogleOAuthSetup = true)}>
-                                        Connect with OAuth
-                                    </Button>
-                                {/if}
-                            {/if}
+                            <Button
+                                size="sm"
+                                class="cursor-pointer"
+                                onclick={() => handleConnect(integration.id)}>
+                                Connect
+                            </Button>
                         </CardFooter>
                     </Card>
                 {/each}
@@ -438,11 +433,6 @@
     googleOAuthConfigured={data.googleOAuthConfigured}
     onSuccess={handleGoogleSetupSuccess}
     onCancel={() => (showGoogleSetup = false)} />
-
-<GoogleOAuthSetup
-    bind:open={showGoogleOAuthSetup}
-    onSuccess={handleGoogleOAuthSetupSuccess}
-    onCancel={() => (showGoogleOAuthSetup = false)} />
 
 <AtlassianConnectorSetup
     bind:open={showAtlassianSetup}
@@ -473,3 +463,13 @@
     bind:open={showFirefliesSetup}
     onSuccess={handleFirefliesSetupSuccess}
     onCancel={() => (showFirefliesSetup = false)} />
+
+<ImapConnectorSetup
+    bind:open={showImapSetup}
+    onSuccess={handleImapSetupSuccess}
+    onCancel={() => (showImapSetup = false)} />
+
+<MicrosoftConnectorSetup
+    bind:open={showMicrosoftSetup}
+    onSuccess={handleMicrosoftSetupSuccess}
+    onCancel={() => (showMicrosoftSetup = false)} />

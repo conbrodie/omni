@@ -12,6 +12,10 @@ import confluenceIcon from '$lib/images/icons/confluence.svg'
 import jiraIcon from '$lib/images/icons/jira.svg'
 import firefliesIcon from '$lib/images/icons/fireflies.svg'
 import hubspotIcon from '$lib/images/icons/hubspot.svg'
+import microsoftIcon from '$lib/images/icons/microsoft.svg'
+import oneDriveIcon from '$lib/images/icons/onedrive.svg'
+import outlookIcon from '$lib/images/icons/outlook.svg'
+import sharePointIcon from '$lib/images/icons/sharepoint.svg'
 
 // Google Workspace MIME types
 const GOOGLE_DOCS_MIMETYPES = [
@@ -44,13 +48,13 @@ export function getDocumentIconPath(sourceType: string, contentType: string): st
 
     // For Google Drive, check content type to determine specific icon
     if (sourceType === SourceType.GOOGLE_DRIVE) {
-        if (GOOGLE_DOCS_MIMETYPES.includes(contentType)) {
+        if (contentType === 'document' || GOOGLE_DOCS_MIMETYPES.includes(contentType)) {
             return googleDocsIcon
         }
-        if (GOOGLE_SHEETS_MIMETYPES.includes(contentType)) {
+        if (contentType === 'spreadsheet' || GOOGLE_SHEETS_MIMETYPES.includes(contentType)) {
             return googleSheetsIcon
         }
-        if (GOOGLE_SLIDES_MIMETYPES.includes(contentType)) {
+        if (contentType === 'presentation' || GOOGLE_SLIDES_MIMETYPES.includes(contentType)) {
             return googleSlidesIcon
         }
         // Default to generic Google Drive icon for other file types
@@ -59,8 +63,12 @@ export function getDocumentIconPath(sourceType: string, contentType: string): st
         return confluenceIcon
     } else if (sourceType === SourceType.JIRA) {
         return jiraIcon
+    } else if (sourceType === SourceType.SLACK) {
+        return slackIcon
     } else if (sourceType === SourceType.FIREFLIES) {
         return firefliesIcon
+    } else if (sourceType === SourceType.HUBSPOT) {
+        return hubspotIcon
     }
 
     // For other source types, return null (will use fallback icon)
@@ -84,10 +92,19 @@ export function getSourceIconPath(sourceType: string): string | null {
             return firefliesIcon
         case SourceType.HUBSPOT:
             return hubspotIcon
+        case SourceType.ONE_DRIVE:
+            return oneDriveIcon
+        case SourceType.OUTLOOK:
+        case SourceType.OUTLOOK_CALENDAR:
+            return outlookIcon
+        case SourceType.SHARE_POINT:
+            return sharePointIcon
         case SourceType.GITHUB:
             return null // TODO: Add github icon when available
         case SourceType.LOCAL_FILES:
             return null // Use fallback FileText icon
+        case SourceType.IMAP:
+            return null // Uses Mail lucide icon
         default:
             return null // Use fallback FileText icon
     }

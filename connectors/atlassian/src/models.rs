@@ -1,6 +1,7 @@
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
+pub use shared::models::{ActionDefinition, ConnectorManifest};
 use shared::models::{ConnectorEvent, DocumentAttributes, DocumentMetadata, DocumentPermissions};
 use std::collections::HashMap;
 use time::OffsetDateTime;
@@ -8,22 +9,6 @@ use time::OffsetDateTime;
 // ============================================================================
 // Connector Protocol Models
 // ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectorManifest {
-    pub name: String,
-    pub version: String,
-    pub sync_modes: Vec<String>,
-    #[serde(default)]
-    pub actions: Vec<ActionDefinition>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionDefinition {
-    pub name: String,
-    pub description: String,
-    pub parameters: JsonValue,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncResponse {
@@ -684,6 +669,7 @@ impl ConfluencePage {
             author: Some(self.author_id.clone()),
             created_at: Some(self.created_at),
             updated_at: Some(self.created_at),
+            content_type: Some("page".to_string()),
             mime_type: Some("text/html".to_string()),
             size: Some(self.extract_plain_text().len().to_string()),
             url: Some(url),
@@ -864,6 +850,7 @@ impl JiraIssue {
             author: self.fields.creator.as_ref().map(|c| c.display_name.clone()),
             created_at,
             updated_at,
+            content_type: Some("issue".to_string()),
             mime_type: Some("text/plain".to_string()),
             size: Some(self.to_document_content().len().to_string()),
             url,

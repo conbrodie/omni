@@ -161,8 +161,6 @@ module "compute" {
   encryption_key_arn    = module.secrets.encryption_key_arn
   encryption_salt_arn   = module.secrets.encryption_salt_arn
 
-  resend_api_key    = var.resend_api_key
-
   # AI service configuration
   embedding_model         = var.embedding_model
   embedding_max_model_len = var.embedding_max_model_len
@@ -198,6 +196,7 @@ module "compute" {
   session_cookie_name        = var.session_cookie_name
   session_duration_days      = var.session_duration_days
   ai_answer_enabled          = var.ai_answer_enabled
+  agents_enabled             = var.agents_enabled
 
   # Storage resources for S3 and batch inference
   content_bucket_arn     = module.storage.content_bucket_arn
