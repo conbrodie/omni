@@ -16,24 +16,9 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-
-from anthropic.types import (
-    RawMessageStartEvent,
-    RawContentBlockStartEvent,
-    RawContentBlockDeltaEvent,
-    RawContentBlockStopEvent,
-    RawMessageStopEvent,
-    RawMessageDeltaEvent,
-    Message,
-    Usage,
-    TextBlock,
-    ToolUseBlock,
-    InputJSONDelta,
-    TextDelta,
-    MessageDeltaUsage,
-)
-from anthropic.types.raw_message_delta_event import Delta
 from ulid import ULID
+
+from .llm_helpers import create_mock_llm, parse_sse_events
 
 from db import UsersRepository, ChatsRepository, MessagesRepository
 import db.connection
@@ -43,101 +28,6 @@ from tools import SearchResponse, SearchResult
 from tools.searcher_client import Document
 
 pytestmark = pytest.mark.integration
-
-
-# ---------------------------------------------------------------------------
-# Mock LLM helpers
-# ---------------------------------------------------------------------------
-
-
-def _message_start_event():
-    return RawMessageStartEvent(
-        type="message_start",
-        message=Message(
-            id="msg_test",
-            content=[],
-            model="mock",
-            role="assistant",
-            stop_reason=None,
-            stop_sequence=None,
-            type="message",
-            usage=Usage(input_tokens=10, output_tokens=0),
-        ),
-    )
-
-
-def _tool_call_events(tool_call_json: dict[str, Any]):
-    """Yield Anthropic SDK events simulating a tool_use content block."""
-    yield _message_start_event()
-    yield RawContentBlockStartEvent(
-        type="content_block_start",
-        index=0,
-        content_block=ToolUseBlock(
-            type="tool_use",
-            id="toolu_attr_test",
-            name="search_documents",
-            input={},
-        ),
-    )
-    yield RawContentBlockDeltaEvent(
-        type="content_block_delta",
-        index=0,
-        delta=InputJSONDelta(
-            type="input_json_delta",
-            partial_json=json.dumps(tool_call_json),
-        ),
-    )
-    yield RawContentBlockStopEvent(type="content_block_stop", index=0)
-    yield RawMessageDeltaEvent(
-        type="message_delta",
-        delta=Delta(stop_reason="tool_use", stop_sequence=None),
-        usage=MessageDeltaUsage(output_tokens=30),
-    )
-    yield RawMessageStopEvent(type="message_stop")
-
-
-def _text_response_events(text: str):
-    """Yield Anthropic SDK events simulating a final text response."""
-    yield _message_start_event()
-    yield RawContentBlockStartEvent(
-        type="content_block_start",
-        index=0,
-        content_block=TextBlock(type="text", text=""),
-    )
-    yield RawContentBlockDeltaEvent(
-        type="content_block_delta",
-        index=0,
-        delta=TextDelta(type="text_delta", text=text),
-    )
-    yield RawContentBlockStopEvent(type="content_block_stop", index=0)
-    yield RawMessageDeltaEvent(
-        type="message_delta",
-        delta=Delta(stop_reason="end_turn", stop_sequence=None),
-        usage=MessageDeltaUsage(output_tokens=10),
-    )
-    yield RawMessageStopEvent(type="message_stop")
-
-
-def create_mock_llm(
-    tool_call_json: dict[str, Any], response_text: str = "Here are the results."
-):
-    """Return a mock LLMProvider whose stream_response yields tool call then text."""
-    call_count = 0
-
-    async def stream_response(*_args, **_kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            for evt in _tool_call_events(tool_call_json):
-                yield evt
-        else:
-            for evt in _text_response_events(response_text):
-                yield evt
-
-    provider = AsyncMock()
-    provider.stream_response = stream_response
-    provider.health_check.return_value = True
-    return provider
 
 
 # ---------------------------------------------------------------------------
@@ -177,33 +67,6 @@ def create_mock_searcher():
     searcher = AsyncMock()
     searcher.handle.return_value = MOCK_SEARCH_RESPONSE
     return searcher
-
-
-# ---------------------------------------------------------------------------
-# SSE parsing
-# ---------------------------------------------------------------------------
-
-
-def parse_sse_events(body: str) -> list[tuple[str, str]]:
-    """Parse SSE text into list of (event_type, data) tuples."""
-    events = []
-    current_event = None
-    current_data_lines: list[str] = []
-
-    for line in body.split("\n"):
-        if line.startswith("event: "):
-            current_event = line[len("event: ") :]
-        elif line.startswith("data: "):
-            current_data_lines.append(line[len("data: ") :])
-        elif line == "" and current_event is not None:
-            events.append((current_event, "\n".join(current_data_lines)))
-            current_event = None
-            current_data_lines = []
-
-    if current_event is not None:
-        events.append((current_event, "\n".join(current_data_lines)))
-
-    return events
 
 
 # ---------------------------------------------------------------------------

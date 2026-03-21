@@ -168,7 +168,7 @@ export class ChatMessageRepository {
         this.db = dbInstance
     }
 
-    async create(chatId: string, message: MessageParam): Promise<ChatMessage> {
+    async create(chatId: string, message: MessageParam, mentiondDocumentIds: string[] = []): Promise<ChatMessage> {
         const nextSeqNum = await this.getNextSequenceNumber(chatId)
         const contentText = extractContentText(message)
 
@@ -181,6 +181,7 @@ export class ChatMessageRepository {
                 messageSeqNum: nextSeqNum,
                 message,
                 contentText,
+                mentiondDocumentIds
             })
             .returning()
 

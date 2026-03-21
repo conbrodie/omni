@@ -52,7 +52,7 @@ class MessagesRepository:
         pool = await self._get_pool()
 
         query = """
-            SELECT id, chat_id, message_seq_num, message, created_at
+            SELECT id, chat_id, message_seq_num, message, created_at, mentioned_document_ids
             FROM chat_messages
             WHERE chat_id = $1
             ORDER BY message_seq_num

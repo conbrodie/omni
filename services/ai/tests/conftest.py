@@ -11,6 +11,10 @@ Test Strategy:
 
 import os
 
+# Disable Ryuk (testcontainers cleanup container) — it uses port 8080 which conflicts
+# with the running docker-compose stack. Containers are still cleaned up via context managers.
+os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+
 # Set required env vars before importing app modules (config.py exits if these are missing)
 os.environ.setdefault("PORT", "8000")
 os.environ.setdefault("MODEL_PATH", "/tmp/models")

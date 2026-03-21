@@ -1,7 +1,7 @@
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel
-
 
 class SearchToolParams(BaseModel):
     query: str
@@ -10,3 +10,9 @@ class SearchToolParams(BaseModel):
     content_types: list[str] | None = None
     attributes: dict[str, Any] | None = None
     limit: int | None = 20
+
+@dataclass
+class MentionedDocumentContext:
+    doc_id: str
+    title: str
+    content: str

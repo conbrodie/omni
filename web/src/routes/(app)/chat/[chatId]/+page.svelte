@@ -544,6 +544,8 @@
                         },
                         messageSeqNum: chatMessages.length + 1,
                         createdAt: new Date(),
+                        contentText: null,
+                        mentiondDocumentIds: null
                     })
                 }
             }
@@ -574,6 +576,8 @@
                         },
                         messageSeqNum: chatMessages.length + 1,
                         createdAt: new Date(),
+                        contentText: null,
+                        mentiondDocumentIds: null
                     })
                 } else if (data.type === 'content_block_start') {
                     if (data.content_block.type === 'tool_use') {
@@ -675,7 +679,7 @@
         }
     }
 
-    async function handleSubmit() {
+    async function handleSubmit(mentionedDocumentIds: string[] = []) {
         const userMsg = userMessage.trim()
         if (userMsg) {
             const response = await fetch(`/api/chat/${data.chat.id}/messages`, {
@@ -686,6 +690,7 @@
                 body: JSON.stringify({
                     content: userMsg,
                     role: 'user',
+                    mentionedDocumentIds
                 }),
             })
 
@@ -706,6 +711,8 @@
                 },
                 messageSeqNum: data.messages.length,
                 createdAt: new Date(),
+                mentiondDocumentIds: null,
+                contentText: null
             }
             chatMessages.push(newUserMessage)
 

@@ -109,18 +109,23 @@ class ChatMessage:
     message_seq_num: int
     message: Dict[str, Any]  # Full JSONB message content
     created_at: datetime
+    mentioned_document_ids: list[str] = None
 
     @classmethod
     def from_row(cls, row: dict) -> "ChatMessage":
         """Create ChatMessage from database row"""
         if isinstance(row["message"], str):
             row["message"] = json.loads(row["message"])
+        doc_ids = row.get("mentioned_document_ids")
+        if isinstance(doc_ids, str):
+            doc_ids = json.loads(doc_ids)
         return cls(
             id=row["id"],
             chat_id=row["chat_id"],
             message_seq_num=row["message_seq_num"],
             message=row["message"],
             created_at=row["created_at"],
+            mentioned_document_ids=doc_ids or [],
         )
 
     def to_dict(self) -> dict:

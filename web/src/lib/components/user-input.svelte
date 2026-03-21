@@ -33,7 +33,7 @@
     interface UserInputProps {
         value: string
         inputMode: InputMode
-        onSubmit: () => void | Promise<void>
+        onSubmit: (mentionedDocumentIds: string[]) => void | Promise<void>
         onInput: (value: string) => void
         modeSelectorEnabled: boolean
         placeholders?: Record<InputMode, string>
@@ -267,6 +267,13 @@
         onInput(inputRef.innerText)
     }
 
+    function getMentionedDocumentIds(): string[] {
+        if (!inputRef) return []
+        return Array.from(inputRef.querySelectorAll('[data-document-id]'))
+                    .map((el) => (el as HTMLElement).dataset.documentId!)
+                    .filter(Boolean)
+    }
+
     function handleKeyPress(event: KeyboardEvent) {
         if (mentionActive && mentionResults.length > 0) {
             if (event.key === 'ArrowDown') {
@@ -300,7 +307,7 @@
 
     async function handleSubmitClick() {
         if (value.trim() && !disabled && !isLoading) {
-            await onSubmit()
+            await onSubmit(getMentionedDocumentIds())
         }
     }
 
